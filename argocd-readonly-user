@@ -1,0 +1,81 @@
+1. argocd-cm (Main ConfigMap)
+This is where you define user accounts.
+
+bash
+Copy
+Edit
+kubectl edit configmap argocd-cm -n argocd
+➡️ Under data:, add this line to enable the readonly-user:
+
+yaml
+Copy
+Edit
+accounts.readonly-user: login
+If you want API access too:
+
+yaml
+Copy
+Edit
+accounts.readonly-user: login, apiKey
+🔧 2. argocd-rbac-cm (RBAC ConfigMap)
+This is where you define roles and permissions.
+
+bash
+Copy
+Edit
+kubectl edit configmap argocd-rbac-cm -n argocd
+➡️ Under data:, add:
+
+yaml
+Copy
+Edit
+policy.csv: |
+  g, readonly-user, role:readonly
+If policy.csv: already exists, just append the line inside it.
+
+(You can also define your own role instead of role:readonly, if needed.)
+
+🔐 3. argocd-secret (To Set Password)
+This is where you set the bcrypt-hashed password for the user.
+
+Generate the bcrypt hash for password changeme (if needed):
+
+bash
+Copy
+Edit
+docker run --rm httpd:2.4 htpasswd -nbB "" changeme | cut -d ":" -f 2
+Sample hash:
+
+perl
+Copy
+Edit
+$2y$05$fTVjeSbZtdtP0UuYnm8U4uMvDWr9WTzOiDdx30AswfyBpFV5YINzm
+Then patch the secret:
+
+bash
+Copy
+Edit
+kubectl -n argocd patch secret argocd-secret \
+  --type merge \
+  -p '{"stringData": {
+    "accounts.readonly-user.password": "$2y$05$fTVjeSbZtdtP0UuYnm8U4uMvDWr9WTzOiDdx30AswfyBpFV5YINzm"
+  }}'
+🔄 Restart ArgoCD Server
+bash
+Copy
+Edit
+kubectl rollout restart deployment argocd-server -n argocd
+✅ Final Login
+Username: readonly-user
+
+Password: changeme
+
+Let me know if you’d like to limit this user to specific projects/apps, or create a custom role instead of role:readonly.
+
+
+
+
+
+
+
+
