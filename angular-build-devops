@@ -1,0 +1,47 @@
+✅ 1. Helm values.yaml
+Each environment will pass the target env like this:
+
+yaml
+Copy
+Edit
+angularApp:
+  environment: "dev"
+✅ 2. deployment.yaml in Helm chart
+Inject this into your container as an environment variable:
+
+yaml
+Copy
+Edit
+env:
+  - name: APP_ENV
+    value: "{{ .Values.angularApp.environment }}"
+✅ 3. entrypoint.sh (or nginx-startup.sh)
+This script will copy the correct config at runtime:
+
+bash
+Copy
+Edit
+#!/bin/sh
+echo "Starting container with environment: $APP_ENV"
+
+CONFIG_PATH="/usr/share/nginx/html/env-configs/${APP_ENV}.json"
+TARGET_PATH="/usr/share/nginx/html/assets/runtime-config.json"
+
+if [ -f "$CONFIG_PATH" ]; then
+  cp "$CONFIG_PATH" "$TARGET_PATH"
+  echo "Copied config for $APP_ENV"
+else
+  echo "Config file not found: $CONFIG_PATH"
+  exit 1
+fi
+
+# Start Nginx or any other process
+nginx -g 'daemon off;'
+Make sure your Dockerfile uses this script as the entrypoint:
+
+dockerfile
+Copy
+Edit
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
