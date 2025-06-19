@@ -1,0 +1,6 @@
+istio:
+  enabled: true
+  gateway: istio-system/default-gateway
+  hosts:
+    - prod.example.com
+  uriPrefix: /api-service
