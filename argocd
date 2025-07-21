@@ -1,0 +1,162 @@
+🎯 Goal:
+You have:
+
+✅ ArgoCD running in source EKS cluster (e.g., source-eks)
+
+✅ A target EKS cluster (e.g., target-eks) where your apps need to be deployed
+
+✅ OIDC/IAM access credentials to the target cluster
+
+You want ArgoCD to deploy apps to target-eks, securely, using OIDC (IRSA).
+
+🔧 STEP-BY-STEP: ArgoCD Multi-Cluster via OIDC (IRSA)
+✅ Step 1: Enable OIDC & IRSA on target EKS
+This is already enabled by default in modern EKS.
+
+Verify it:
+
+sh
+Copy
+Edit
+aws eks describe-cluster --name target-eks --query "cluster.identity.oidc.issuer" --output text
+✅ Step 2: Create an IAM Role with OIDC trust (in target AWS account)
+This role will be assumed by ArgoCD using OIDC.
+
+Trust policy (replace OIDC URL and service account details):
+
+json
+Copy
+Edit
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<TARGET-AWS-ACCOUNT-ID>:oidc-provider/<OIDC-URL>"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "<OIDC-URL>:sub": "system:serviceaccount:argocd:argocd-manager"
+        }
+      }
+    }
+  ]
+}
+✅ Step 3: Attach minimal EKS permissions to the IAM Role
+json
+Copy
+Edit
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListNodegroups",
+        "eks:AccessKubernetesApi"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+✅ Step 4: Annotate ArgoCD’s service account to assume that role
+In the source cluster, ArgoCD runs using a service account (e.g., argocd-manager).
+
+Patch it like this:
+
+sh
+Copy
+Edit
+kubectl annotate serviceaccount argocd-manager \
+  -n argocd \
+  eks.amazonaws.com/role-arn=arn:aws:iam::<TARGET-AWS-ACCOUNT-ID>:role/ArgoCDRemoteAccessRole
+✅ Step 5: Create ArgoCD Cluster Secret
+You now tell ArgoCD how to connect to the target cluster by manually creating a secret.
+
+You don’t need to setup kubectl context at all here.
+
+yaml
+Copy
+Edit
+apiVersion: v1
+kind: Secret
+metadata:
+  name: target-eks-cluster
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+type: Opaque
+data:
+  name: dGFyZ2V0LWVrcw==            # base64 of 'target-eks'
+  server: aHR0cHM6Ly9rOHMuZWtzLmFtYXpvbmF3cy5jb20uLi4=  # base64 of target EKS API server URL
+  config: <base64-encoded JSON>
+🔐 Sample JSON for config field:
+Before base64 encoding:
+
+json
+Copy
+Edit
+{
+  "execProviderConfig": {
+    "command": "aws",
+    "args": [
+      "eks",
+      "get-token",
+      "--cluster-name",
+      "target-eks"
+    ],
+    "apiVersion": "client.authentication.k8s.io/v1beta1"
+  },
+  "tlsClientConfig": {
+    "insecure": false
+  }
+}
+Then base64 encode that block and put into the config: section.
+
+✅ ArgoCD will now use OIDC to call aws eks get-token to get an auth token for the target cluster, and connect securely.
+
+🔁 Summary Flow
+Component	Location	Purpose
+ArgoCD	Source cluster	Manages apps
+Target EKS	Target cluster	Destination of deployment
+IAM Role	Target AWS acc	Grants access to ArgoCD using IRSA
+ServiceAccount	Source cluster	Used by ArgoCD to assume the target IAM role
+Cluster Secret	ArgoCD namespace	Tells ArgoCD how to connect to the target EKS
+
+✅ You Don’t Need:
+kubectl config to contain the target cluster context
+
+ArgoCD running on the target cluster
+
+Any manual interaction beyond token-based aws eks get-token setup
+
+Would you like me to generate a diagram or PDF version of this step-by-step guide?
+
+
+
+
+
+
+
+
+
+Ask ChatGPT
+You said:
+create a document of this
+
+
+ChatGPT said:
+Your document "Multi-Cluster Deployment in ArgoCD using OIDC (IRSA)" has been created successfully. You can download it using the link below:
+
+👉 Download PDF 
+
+
+
+
+
+
+
+
